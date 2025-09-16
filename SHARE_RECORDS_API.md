@@ -20,52 +20,51 @@ CREATE TABLE share_records (
 
 ### Create Share Record
 - Method: `POST`
-- Path: `/projects`
+- Path: `/share-records`
 - Description: Records a public key sharing event between team members
 - Request body:
 ```json
 {
-  "project_name": "Aurora",
+  "shared_by": "Ada Lovelace",
+  "shared_to": "Bob Smith",
   "pub_key": "pk_live_xxx",
-  "team_leader": "Ada Lovelace"
+  "project": "Aurora"
 }
 ```
-- **Field mapping**:
-  - `project_name` → stored as `shared_to` and `project`
-  - `team_leader` → stored as `shared_by`
-  - `pub_key` → stored as `pub_key`
 - Response `200 OK`:
 ```json
 {
   "id": 1,
-  "project_name": "Aurora",
+  "shared_by": "Ada Lovelace",
+  "shared_to": "Bob Smith",
   "pub_key": "pk_live_xxx",
-  "team_leader": "Ada Lovelace"
+  "project": "Aurora"
 }
 ```
 
 #### cURL
 ```bash
-curl -sS -X POST http://127.0.0.1:8000/projects \
+curl -sS -X POST http://127.0.0.1:8000/share-records \
   -H 'Content-Type: application/json' \
-  -d '{"project_name":"Aurora","pub_key":"pk_live_xxx","team_leader":"Ada Lovelace"}' | jq .
+  -d '{"shared_by":"Ada Lovelace","shared_to":"Bob Smith","pub_key":"pk_live_xxx","project":"Aurora"}' | jq .
 ```
 
 ### List/Filter Share Records
 - Method: `GET`
-- Path: `/projects`
+- Path: `/share-records`
 - Description: Query key sharing records by project or sharer
 - Query params (optional):
-  - `project_name` (exact match on `project` field)
-  - `team_leader` (exact match on `shared_by` field)
+  - `project` (exact match on `project` field)
+  - `shared_by` (exact match on `shared_by` field)
 - Response `200 OK`:
 ```json
 [
   {
     "id": 2,
-    "project_name": "Aurora",
+    "shared_by": "Ada Lovelace",
+    "shared_to": "Bob Smith",
     "pub_key": "pk_live_yyy",
-    "team_leader": "Ada Lovelace"
+    "project": "Aurora"
   }
 ]
 ```
@@ -73,16 +72,16 @@ curl -sS -X POST http://127.0.0.1:8000/projects \
 #### cURL
 ```bash
 # All share records
-curl -sS "http://127.0.0.1:8000/projects" | jq .
+curl -sS "http://127.0.0.1:8000/share-records" | jq .
 
-# Filter by project name
-curl -sS "http://127.0.0.1:8000/projects?project_name=Aurora" | jq .
+# Filter by project
+curl -sS "http://127.0.0.1:8000/share-records?project=Aurora" | jq .
 
 # Filter by who shared the key
-curl -sS "http://127.0.0.1:8000/projects?team_leader=Ada%20Lovelace" | jq .
+curl -sS "http://127.0.0.1:8000/share-records?shared_by=Ada%20Lovelace" | jq .
 
 # Filter by both
-curl -sS "http://127.0.0.1:8000/projects?project_name=Aurora&team_leader=Ada%20Lovelace" | jq .
+curl -sS "http://127.0.0.1:8000/share-records?project=Aurora&shared_by=Ada%20Lovelace" | jq .
 ```
 
 ### Use Cases
@@ -93,18 +92,20 @@ curl -sS "http://127.0.0.1:8000/projects?project_name=Aurora&team_leader=Ada%20L
 ### Request/Response Types (Pseudocode)
 ```ts
 // Request
-interface ProjectCreate {
-  project_name: string;
+interface ShareRecordCreate {
+  shared_by: string;
+  shared_to: string;
   pub_key: string;
-  team_leader: string;
+  project: string;
 }
 
 // Response
-interface Project {
+interface ShareRecord {
   id: number;
-  project_name: string;
+  shared_by: string;
+  shared_to: string;
   pub_key: string;
-  team_leader: string;
+  project: string;
 }
 ```
 

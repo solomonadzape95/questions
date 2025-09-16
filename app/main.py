@@ -2,8 +2,8 @@
 import logging
 import time
 from fastapi import FastAPI, HTTPException, Request
-from .schemas import QuestionRequest, QuestionResponse, ProjectCreate, Project
-from .services import generate_questions, init_projects_table, insert_project, find_projects
+from .schemas import QuestionRequest, QuestionResponse, ShareRecordCreate, ShareRecord
+from .services import generate_questions, init_projects_table, insert_share_record, find_share_records
 
 app = FastAPI()
 
@@ -84,29 +84,30 @@ async def health():
     return {"message": "api healthy, ok", "status":"200"}
 
 
-@app.post("/projects", response_model=Project)
-async def create_project(body: ProjectCreate):
+@app.post("/share-records", response_model=ShareRecord)
+async def create_share_record(body: ShareRecordCreate):
     try:
         logger.info(
-            "projects.create called name=%s leader=%s",
-            body.project_name,
-            body.team_leader,
+            "share_records.create called shared_by=%s shared_to=%s project=%s",
+            body.shared_by,
+            body.shared_to,
+            body.project,
         )
-        project = insert_project(body)
-        logger.info("projects.create success id=%s", project.id)
-        return project
+        share_record = insert_share_record(body)
+        logger.info("share_records.create success id=%s", share_record.id)
+        return share_record
     except Exception as exc:
-        logger.exception("projects.create error=%s", str(exc))
+        logger.exception("share_records.create error=%s", str(exc))
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-@app.get("/projects", response_model=list[Project])
-async def list_projects(project_name: str | None = None, team_leader: str | None = None):
+@app.get("/share-records", response_model=list[ShareRecord])
+async def list_share_records(project: str | None = None, shared_by: str | None = None):
     try:
-        logger.info("projects.list called name=%s leader=%s", project_name or "*", team_leader or "*")
-        results = find_projects(project_name=project_name, team_leader=team_leader)
-        logger.info("projects.list success count=%s", len(results))
+        logger.info("share_records.list called project=%s shared_by=%s", project or "*", shared_by or "*")
+        results = find_share_records(project=project, shared_by=shared_by)
+        logger.info("share_records.list success count=%s", len(results))
         return results
     except Exception as exc:
-        logger.exception("projects.list error=%s", str(exc))
+        logger.exception("share_records.list error=%s", str(exc))
         raise HTTPException(status_code=500, detail=str(exc))

@@ -16,14 +16,16 @@ class QuestionResponse(BaseModel):
     questions: List[Question]
 
 
-# Projects API
-class ProjectCreate(BaseModel):
-    project_name: str = Field(..., min_length=1)
+# Share Records API
+class ShareRecordCreate(BaseModel):
+    shared_by: str = Field(..., min_length=1)
+    shared_to: str = Field(..., min_length=1)
     pub_key: str = Field(..., min_length=1)
-    team_leader: str = Field(..., min_length=1)
+    project: str = Field(..., min_length=1)
 
-class Project(BaseModel):
+class ShareRecord(BaseModel):
     id: int
-    project_name: str
+    shared_by: str
+    shared_to: str
     pub_key: str
-    team_leader: str
+    project: str

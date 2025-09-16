@@ -7,7 +7,7 @@ import psycopg
 from google import genai
 from dotenv import load_dotenv
 from .prompts import PROMPT_TEMPLATES
-from .schemas import Question, QuestionResponse, Project, ProjectCreate
+from .schemas import Question, QuestionResponse, ShareRecord, ShareRecordCreate
 
 load_dotenv()
 #load gemini api key and start a client
@@ -107,7 +107,7 @@ def init_projects_table() -> None:
     logger.info("db.init_done")
 
 
-def insert_project(payload: ProjectCreate) -> Project:
+def insert_share_record(payload: ShareRecordCreate) -> ShareRecord:
     dsn = _get_dsn()
     insert_sql = (
         """
@@ -116,42 +116,42 @@ def insert_project(payload: ProjectCreate) -> Project:
         RETURNING id, pub_key, shared_by, shared_to, project;
         """
     )
-    logger.info("db.insert_share_record shared_by=%s shared_to=%s project=%s", payload.team_leader, payload.project_name, payload.pub_key)
+    logger.info("db.insert_share_record shared_by=%s shared_to=%s project=%s", payload.shared_by, payload.shared_to, payload.project)
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 insert_sql,
-                (payload.pub_key, payload.team_leader, payload.project_name, payload.pub_key),
+                (payload.pub_key, payload.shared_by, payload.shared_to, payload.project),
             )
             row = cur.fetchone()
         conn.commit()
-    project = Project(id=row[0], project_name=row[4], pub_key=row[1], team_leader=row[2])
-    logger.info("db.insert_share_record_success id=%s", project.id)
-    return project
+    share_record = ShareRecord(id=row[0], shared_by=row[2], shared_to=row[3], pub_key=row[1], project=row[4])
+    logger.info("db.insert_share_record_success id=%s", share_record.id)
+    return share_record
 
 
-def find_projects(project_name: Optional[str] = None, team_leader: Optional[str] = None) -> list[Project]:
+def find_share_records(project: Optional[str] = None, shared_by: Optional[str] = None) -> list[ShareRecord]:
     dsn = _get_dsn()
     where_clauses = []
     params: list = []
-    if project_name:
+    if project:
         where_clauses.append("project = %s")
-        params.append(project_name)
-    if team_leader:
+        params.append(project)
+    if shared_by:
         where_clauses.append("shared_by = %s")
-        params.append(team_leader)
+        params.append(shared_by)
     where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
     query = (
         "SELECT id, pub_key, shared_by, shared_to, project FROM share_records" + where_sql + " ORDER BY id DESC"
     )
-    logger.info("db.find_share_records project=%s shared_by=%s", project_name or "*", team_leader or "*")
-    results: list[Project] = []
+    logger.info("db.find_share_records project=%s shared_by=%s", project or "*", shared_by or "*")
+    results: list[ShareRecord] = []
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
             cur.execute(query, params if params else None)
             for row in cur.fetchall():
                 results.append(
-                    Project(id=row[0], project_name=row[4], pub_key=row[1], team_leader=row[2])
+                    ShareRecord(id=row[0], shared_by=row[2], shared_to=row[3], pub_key=row[1], project=row[4])
                 )
     logger.info("db.find_share_records_success count=%s", len(results))
     return results
