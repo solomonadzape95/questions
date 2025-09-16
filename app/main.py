@@ -2,8 +2,8 @@
 import logging
 import time
 from fastapi import FastAPI, HTTPException, Request
-from .schemas import QuestionRequest, QuestionResponse
-from .services import generate_questions
+from .schemas import QuestionRequest, QuestionResponse, ProjectCreate, Project
+from .services import generate_questions, init_projects_table, insert_project, find_projects
 
 app = FastAPI()
 
@@ -13,6 +13,11 @@ logging.basicConfig(level=logging.INFO)
 @app.on_event("startup")
 async def on_startup():
     logger.info("API startup complete")
+    # Ensure DB is ready (no-op if already created)
+    try:
+        init_projects_table()
+    except Exception as exc:
+        logger.exception("db.init_failed error=%s", str(exc))
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -77,3 +82,31 @@ async def generate(request: QuestionRequest):
 @app.get("/health")
 async def health():
     return {"message": "api healthy, ok", "status":"200"}
+
+
+@app.post("/projects", response_model=Project)
+async def create_project(body: ProjectCreate):
+    try:
+        logger.info(
+            "projects.create called name=%s leader=%s",
+            body.project_name,
+            body.team_leader,
+        )
+        project = insert_project(body)
+        logger.info("projects.create success id=%s", project.id)
+        return project
+    except Exception as exc:
+        logger.exception("projects.create error=%s", str(exc))
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/projects", response_model=list[Project])
+async def list_projects(project_name: str | None = None, team_leader: str | None = None):
+    try:
+        logger.info("projects.list called name=%s leader=%s", project_name or "*", team_leader or "*")
+        results = find_projects(project_name=project_name, team_leader=team_leader)
+        logger.info("projects.list success count=%s", len(results))
+        return results
+    except Exception as exc:
+        logger.exception("projects.list error=%s", str(exc))
+        raise HTTPException(status_code=500, detail=str(exc))

@@ -2,11 +2,12 @@ import os
 import json
 import logging
 import time
-from typing import List
+from typing import List, Optional
+import psycopg
 from google import genai
 from dotenv import load_dotenv
 from .prompts import PROMPT_TEMPLATES
-from .schemas import Question, QuestionResponse
+from .schemas import Question, QuestionResponse, Project, ProjectCreate
 
 load_dotenv()
 #load gemini api key and start a client
@@ -65,3 +66,92 @@ async def generate_questions(category:str, n:int = 10):
         logger.exception("gen.parse_error category=%s error=%s", category, str(exc))
         # Last resort: wrap raw text
         return {"category": category, "questions": [], "raw": getattr(response, "text", "")}
+
+
+# =====================
+# Postgres Integration
+# =====================
+
+def _get_dsn() -> str:
+    dsn = os.getenv("POSTGRES_DSN")
+    if dsn:
+        return dsn
+    host = os.getenv("POSTGRES_HOST", "localhost")
+    port = os.getenv("POSTGRES_PORT", "5432")
+    user = os.getenv("POSTGRES_USER", "postgres")
+    password = os.getenv("POSTGRES_PASSWORD", "postgres")
+    db = os.getenv("POSTGRES_DB", "postgres")
+    return f"postgresql://{user}:{password}@{host}:{port}/{db}"
+
+
+def init_projects_table() -> None:
+    """Create share_records table if it does not exist."""
+    dsn = _get_dsn()
+    logger.info("db.init dsn_host=%s", os.getenv("POSTGRES_HOST", "env_dsn"))
+    create_sql = (
+        """
+        CREATE TABLE IF NOT EXISTS share_records (
+            id SERIAL PRIMARY KEY,
+            pub_key TEXT NOT NULL,
+            shared_by TEXT NOT NULL,
+            shared_to TEXT NOT NULL,
+            project TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        """
+    )
+    with psycopg.connect(dsn) as conn:
+        with conn.cursor() as cur:
+            cur.execute(create_sql)
+        conn.commit()
+    logger.info("db.init_done")
+
+
+def insert_project(payload: ProjectCreate) -> Project:
+    dsn = _get_dsn()
+    insert_sql = (
+        """
+        INSERT INTO share_records (pub_key, shared_by, shared_to, project)
+        VALUES (%s, %s, %s, %s)
+        RETURNING id, pub_key, shared_by, shared_to, project;
+        """
+    )
+    logger.info("db.insert_share_record shared_by=%s shared_to=%s project=%s", payload.team_leader, payload.project_name, payload.pub_key)
+    with psycopg.connect(dsn) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                insert_sql,
+                (payload.pub_key, payload.team_leader, payload.project_name, payload.pub_key),
+            )
+            row = cur.fetchone()
+        conn.commit()
+    project = Project(id=row[0], project_name=row[4], pub_key=row[1], team_leader=row[2])
+    logger.info("db.insert_share_record_success id=%s", project.id)
+    return project
+
+
+def find_projects(project_name: Optional[str] = None, team_leader: Optional[str] = None) -> list[Project]:
+    dsn = _get_dsn()
+    where_clauses = []
+    params: list = []
+    if project_name:
+        where_clauses.append("project = %s")
+        params.append(project_name)
+    if team_leader:
+        where_clauses.append("shared_by = %s")
+        params.append(team_leader)
+    where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+    query = (
+        "SELECT id, pub_key, shared_by, shared_to, project FROM share_records" + where_sql + " ORDER BY id DESC"
+    )
+    logger.info("db.find_share_records project=%s shared_by=%s", project_name or "*", team_leader or "*")
+    results: list[Project] = []
+    with psycopg.connect(dsn) as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, params if params else None)
+            for row in cur.fetchall():
+                results.append(
+                    Project(id=row[0], project_name=row[4], pub_key=row[1], team_leader=row[2])
+                )
+    logger.info("db.find_share_records_success count=%s", len(results))
+    return results

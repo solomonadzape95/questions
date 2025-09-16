@@ -1,6 +1,6 @@
 # app/schemas.py
-from pydantic import BaseModel
-from typing import List
+from pydantic import BaseModel, Field
+from typing import List, Optional
 
 class QuestionRequest(BaseModel):
     category: str
@@ -14,3 +14,16 @@ class Question(BaseModel):
 class QuestionResponse(BaseModel):
     category: str
     questions: List[Question]
+
+
+# Projects API
+class ProjectCreate(BaseModel):
+    project_name: str = Field(..., min_length=1)
+    pub_key: str = Field(..., min_length=1)
+    team_leader: str = Field(..., min_length=1)
+
+class Project(BaseModel):
+    id: int
+    project_name: str
+    pub_key: str
+    team_leader: str
